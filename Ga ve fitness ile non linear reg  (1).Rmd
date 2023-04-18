@@ -1,0 +1,149 @@
+---
+title: "Ecem ga ile nonlinear reg optimizasyon ödevi"
+output: html_document
+---
+
+##Datayı çağırıyorum##
+```{r}
+library(readxl)
+data_1_ <- read_excel("data (1).xlsx")
+View(data_1_)
+```
+##Datayı consoleda düzenledim başlıkları y, x1, x2 olarak ayarladım##
+##>  str(Data)
+tibble [225 × 3] (S3: tbl_df/tbl/data.frame)
+ $ ...1: num [1:225] -0.0669 0.769 0.4431 0.6616 -0.8726 ...
+ $ ...2: num [1:225] -9.30e-01 1.69e+14 -1.16e+14 -7.42e-01 -7.48e-01 ...
+ $ ...3: num [1:225] 2.81e-01 -1.70e-01 -2.36e-02 1.54e-02 1.19e+14 ...
+##
+
+##Datayı özetliyorum##
+```{r}
+summary(data_1_)
+```
+
+##Y, X1, X2 olarak başlık oluşturduğum datayı ödevin değerlendirilmesinde import sıkıntısı yaşanmaması için exportluyorum##
+```{r}
+library("openxlsx")
+write.xlsx(data_1_, 'Data.xlsx')
+```
+
+
+##Linear regresyon denklemini lm içine formul yazarak oluşturuyorum##
+```{r}
+Reg.linear <- lm(Y ~ X1 + X2, data = data_1_)
+```
+
+
+##Linear regresyonumu özetliyorum##
+```{r}
+summary(Reg.linear)
+```
+
+##Genetic Algo paketini install ettikten sonra kullanmak üzere markdownıma çağırıyorum##
+```{r}
+#install.packages('GA')
+library(GA)
+```
+
+##Linear regresyonumu değerlendirmek için bir işlev oluşturuyorum##
+##tahmin edilen y_hat değerini hesaplamak için kesişimi ve en iyi iki değişkeni alıyorum##
+##daha sonra her biri için SSE'yi hesaplayıp döndürüyorum##
+##(OLS, veri seti için en uygun çizgiyi veya regresyon çizgisini bulmak için karesel hatanın (SSE) toplamını en aza indirir)##
+##(GA algoritması fitness fonksiyonunu maksimize etmeye çalışır)##
+```{r}
+OLS <- function(data, b0, b1, b2){
+  attach(data, warn.conflicts=F)
+  Y_hat <- b0  + b1*X1 + b2*X2
+    SSE = t(Y-Y_hat) %*% (Y-Y_hat) #matrix formulation for SSE
+  detach(data)
+  return(SSE)
+}
+
+```
+
+
+##-100 ile 100 arasında 3 parametre kullanarak gerçek değerli bir GA algosu kuruyorum##
+##(upper(max) ve lower(min) değerleri, gerçek GA değerlerinin içindedir)##
+```{r}
+ga.OLS <- ga(type='real-valued', lower =c(-100,-100, -100), 
+             upper =c(100, 100, 100), popSize=500, maxiter=500, names=c('intercept', 'X1', 'X2'),
+             keepBest=T, fitness = function(b) -OLS(data_1_, b[1],b[2], b[3]))
+
+```
+
+##OLS'i genetic algoluyorum ve ga.model olarak atıyorum##
+```{r}
+ga.model <- summary(ga.OLS)
+ga.model
+```
+
+#SSE#
+##Solution kısmından aldığım b0 (intercept), b1(X1), b2(X2) değerlerini SSE hesaplamak için koduma yerleştiriyorum ve linear regresyon için SSE hesaplıyorum##
+## (Bulduğum SSE değeri 1.643691e+30) ##
+```{r}
+OLS(data=data_1_,b0 =95.19233, b1= 0.0937921, b2 = 0.1734156 )
+```
+ 
+
+
+#Non-Linear Regresyon#
+
+##Nonlinear regresyon denklemini lm içine formul yazarak oluşturuyorum##
+```{r}
+Reg.nonlinear <- lm(Y ~ X1 + X2^2, data = data_1_)
+```
+
+
+##NONlinear regresyonumu özetliyorum##
+```{r}
+summary(Reg.nonlinear)
+```
+
+
+##NONlinear regresyonumu değerlendirmek için bir işlev oluşturuyorum##
+##tahmin edilen y_hat değerini hesaplamak için kesişimi ve en iyi iki değişkeni alıyorum##
+##daha sonra her biri için SSE'yi hesaplayıp döndürüyorum##
+```{r}
+OLS2 <- function(data, b0, b1, b2){
+  attach(data, warn.conflicts=F)
+  Y_hat <- b0  + b1*X1 + b2*X2^2
+    SSE = t(Y-Y_hat) %*% (Y-Y_hat) #matrix formulation for SSE
+  detach(data)
+  return(SSE)
+}
+```
+
+
+##Yine NONlinear reg için de -100 ile 100 arasında 3 parametre kullanarak gerçek değerli bir başka GA algosu kuruyorum##
+```{r}
+ga.OLS2 <- ga(type='real-valued', lower =c(-100,-100, -100), 
+             upper =c(100, 100, 100), popSize=500, maxiter=500, names=c('intercept', 'X1', 'X2'),
+             keepBest=T, fitness = function(b) -OLS2(data_1_, b[1],b[2], b[3]))
+
+```
+
+
+##OLS2'yi genetic algoluyorum ve ga.model olarak atıyorum##
+##(OLS'i linear reg için; OLS2'yi NONlinear reg için atadım)
+```{r}
+ga.model <- summary(ga.OLS2)
+ga.model
+```
+
+
+#SSE#
+##Solution kısmından aldığım b0 (intercept), b1(X1), b2(X2) değerlerini SSE hesaplamak için koduma yerleştiriyorum ve bu kez  NONlinear regresyon için SSE hesaplıyorum##
+##(Bulduğum SSE değeri 1.295061e+30)##
+```{r}
+OLS2(data=data_1_,b0 =-43.93408, b1= 0.09469158, b2 = 1.766682e-15 )
+```
+
+
+##(1.295061e+30 < 1.643691e+30) olduğu için NONlinear denklemle kestirdiğim regresyonda hataların kareleri toplamı, linear denklemle kestirdiğim regresyondaki hataların kareleri toplamından daha küçük olduğunu rahatlıkla söyleyebiliyorum.
+##Aynı veri ile kestirilen iki regresyonun doğrusallığının SSE değerine etkisini de oldukça sağlıklı bir şekilde sonuçlandırıyorum##
+
+
+
+
+
